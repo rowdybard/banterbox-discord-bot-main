@@ -62,6 +62,10 @@ export class VoiceManager {
       });
     });
 
+    connection.on("debug", (message) => {
+      logger.info("Voice debug", { guildId: channel.guild.id, msg: message });
+    });
+
     // Phase 1 — signalling: Discord must send VOICE_SERVER_UPDATE back via gateway.
     // If this times out the bot likely lacks Connect permission in the channel.
     try {
