@@ -70,6 +70,8 @@ async function handleJoin(
   voiceManager: VoiceManager,
   voiceListener: VoiceListener,
 ): Promise<void> {
+  await interaction.deferReply({ ephemeral: true });
+
   const channelOption = interaction.options.getChannel("channel");
 
   // Determine target voice channel
@@ -85,14 +87,10 @@ async function handleJoin(
   }
 
   if (!targetChannel) {
-    await interaction.reply({
-      content: "Join a voice channel first, or pass a channel to `/banter join`.",
-      ephemeral: true,
-    });
+    await interaction.editReply("Join a voice channel first, or pass a channel to `/banter join`.");
     return;
   }
 
-  await interaction.deferReply({ ephemeral: true });
   const connection = await voiceManager.join(targetChannel);
   voiceListener.startListening(connection, guildId, voiceManager);
   const settings = await getGuildSettings(guildId);
