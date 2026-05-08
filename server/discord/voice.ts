@@ -42,6 +42,7 @@ export class VoiceManager {
       adapterCreator: channel.guild.voiceAdapterCreator,
       selfDeaf: false, // must be false to receive audio
       selfMute: false,
+      debug: true,
     });
 
     connection.on("stateChange", (oldState, newState) => {
