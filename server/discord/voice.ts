@@ -62,11 +62,33 @@ export class VoiceManager {
       });
     });
 
+    // Phase 1 — signalling: Discord must send VOICE_SERVER_UPDATE back via gateway.
+    // If this times out the bot likely lacks Connect permission in the channel.
+    try {
+      await entersState(connection, VoiceConnectionStatus.Connecting, 8_000);
+    } catch {
+      connection.destroy();
+      logger.error("Voice stuck in signalling — bot may lack Connect permission", {
+        guildId: channel.guild.id,
+        channelId: channel.id,
+      });
+      throw new Error(
+        "Voice signalling timed out — make sure BanterBox has Connect permission in that channel.",
+      );
+    }
+
+    // Phase 2 — UDP handshake: complete IP discovery with Discord's voice server.
     try {
       await entersState(connection, VoiceConnectionStatus.Ready, 30_000);
     } catch {
       connection.destroy();
-      throw new Error("Voice connection timed out");
+      logger.error("Voice stuck in connecting — UDP handshake failed", {
+        guildId: channel.guild.id,
+        channelId: channel.id,
+      });
+      throw new Error(
+        "Voice UDP handshake timed out — network or firewall issue with Discord's voice servers.",
+      );
     }
 
     const player = createAudioPlayer();
