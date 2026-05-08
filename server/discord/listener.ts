@@ -91,6 +91,8 @@ export class VoiceListener {
       const wakeWord = settings.wakeWord ?? "hey banter";
       const { triggered, prompt } = detectWakeWord(transcript, wakeWord);
 
+      logger.info("STT transcript", { guildId, userId, transcript, wakeWord, triggered });
+
       if (!triggered) return;
 
       logger.info("Wake word triggered", { guildId, userId, command: wakeWord });
