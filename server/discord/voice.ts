@@ -42,7 +42,6 @@ export class VoiceManager {
       adapterCreator: channel.guild.voiceAdapterCreator,
       selfDeaf: false, // must be false to receive audio
       selfMute: false,
-      debug: true,
     });
 
     connection.on("stateChange", (oldState, newState) => {
@@ -61,10 +60,6 @@ export class VoiceManager {
         errorClass: err.constructor.name,
         errorMessage: err.message,
       });
-    });
-
-    connection.on("debug", (message) => {
-      logger.info("Voice debug", { guildId: channel.guild.id, msg: message });
     });
 
     // Phase 1 — signalling: Discord must send VOICE_SERVER_UPDATE back via gateway.
