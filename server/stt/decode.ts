@@ -71,7 +71,7 @@ export function decodeAudioStream(opusStream: Readable): Promise<Buffer> {
       }
     });
 
-    opusStream.on("error", done);
-    opusDecoder.on("error", done);
+    opusStream.on("error", (err) => { ffmpeg.kill("SIGKILL"); done(err); });
+    opusDecoder.on("error", (err) => { ffmpeg.kill("SIGKILL"); done(err); });
   });
 }

@@ -70,6 +70,7 @@ export async function startBot(): Promise<Client> {
       !newState.channelId
     ) {
       voiceListener.stopListening(oldState.guild.id);
+      voiceManager.leave(oldState.guild.id);
       logger.info("Bot disconnected from voice externally", {
         guildId: oldState.guild.id,
       });

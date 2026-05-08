@@ -14,9 +14,15 @@ import { Guild, VoiceBasedChannel } from "discord.js";
 import { Readable } from "stream";
 import { logger } from "../logger";
 
+interface QueueItem {
+  buffer: Buffer;
+  resolve: () => void;
+  reject: (err: Error) => void;
+}
+
 interface GuildAudio {
   player: AudioPlayer;
-  queue: Buffer[];
+  queue: QueueItem[];
   playing: boolean;
 }
 
@@ -93,30 +99,41 @@ export class VoiceManager {
       const audio = audioMap.get(guildId);
       if (!audio) return reject(new Error("Not connected to voice in this guild"));
 
-      const stream = Readable.from(buffer);
-      const resource = createAudioResource(stream, {
-        inputType: StreamType.Arbitrary,
-      });
-
-      audio.playing = true;
-
-      const onIdle = () => {
-        audio.playing = false;
-        audio.player.removeListener(AudioPlayerStatus.Idle, onIdle);
-        audio.player.removeListener("error", onError);
-        resolve();
-      };
-
-      const onError = (err: Error) => {
-        audio.playing = false;
-        audio.player.removeListener(AudioPlayerStatus.Idle, onIdle);
-        audio.player.removeListener("error", onError);
-        reject(err);
-      };
-
-      audio.player.once(AudioPlayerStatus.Idle, onIdle);
-      audio.player.once("error", onError);
-      audio.player.play(resource);
+      audio.queue.push({ buffer, resolve, reject });
+      if (!audio.playing) {
+        this._playNext(guildId, audio);
+      }
     });
+  }
+
+  private _playNext(guildId: string, audio: GuildAudio): void {
+    const item = audio.queue.shift();
+    if (!item) {
+      audio.playing = false;
+      return;
+    }
+
+    audio.playing = true;
+
+    const stream = Readable.from(item.buffer);
+    const resource = createAudioResource(stream, {
+      inputType: StreamType.Arbitrary,
+    });
+
+    const onIdle = () => {
+      audio.player.removeListener("error", onError);
+      item.resolve();
+      this._playNext(guildId, audio);
+    };
+
+    const onError = (err: Error) => {
+      audio.player.removeListener(AudioPlayerStatus.Idle, onIdle);
+      item.reject(err);
+      this._playNext(guildId, audio);
+    };
+
+    audio.player.once(AudioPlayerStatus.Idle, onIdle);
+    audio.player.once("error", onError);
+    audio.player.play(resource);
   }
 }

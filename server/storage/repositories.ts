@@ -99,31 +99,34 @@ export async function checkAndIncrementUsage(
   const date = today();
 
   if (db) {
-    const [existing] = await db
-      .select()
-      .from(usageCounters)
-      .where(
-        and(
-          eq(usageCounters.guildId, guildId),
-          eq(usageCounters.date, date),
-          sql`${usageCounters.userId} is null`,
-        ),
-      );
+    return db.transaction(async (tx) => {
+      const [existing] = await tx
+        .select()
+        .from(usageCounters)
+        .where(
+          and(
+            eq(usageCounters.guildId, guildId),
+            eq(usageCounters.date, date),
+            sql`${usageCounters.userId} is null`,
+          ),
+        )
+        .for("update");
 
-    if (!existing) {
-      await db.insert(usageCounters).values({ guildId, date, count: 1 });
-      return { allowed: true, count: 1 };
-    }
+      if (!existing) {
+        await tx.insert(usageCounters).values({ guildId, date, count: 1 });
+        return { allowed: true, count: 1 };
+      }
 
-    const newCount = (existing.count ?? 0) + 1;
-    if (newCount > limit) return { allowed: false, count: existing.count ?? 0 };
+      const newCount = (existing.count ?? 0) + 1;
+      if (newCount > limit) return { allowed: false, count: existing.count ?? 0 };
 
-    await db
-      .update(usageCounters)
-      .set({ count: newCount })
-      .where(eq(usageCounters.id, existing.id));
+      await tx
+        .update(usageCounters)
+        .set({ count: newCount })
+        .where(eq(usageCounters.id, existing.id));
 
-    return { allowed: true, count: newCount };
+      return { allowed: true, count: newCount };
+    });
   }
 
   // In-memory fallback

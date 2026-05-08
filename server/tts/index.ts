@@ -22,25 +22,26 @@ export async function generateTTS(
   const cacheKey = `${voiceId ?? ""}|${text}`;
   const cached = getCached(cacheKey);
   if (cached) {
-    return { buffer: cached, provider: process.env.ELEVENLABS_API_KEY ? "elevenlabs" : "openai" };
+    return { buffer: cached.buffer, provider: cached.provider as TTSProvider };
   }
 
   const useElevenLabs = !!process.env.ELEVENLABS_API_KEY;
 
   try {
+    const provider: TTSProvider = useElevenLabs ? "elevenlabs" : "openai";
     const buffer = useElevenLabs
       ? await generateElevenLabsTTS(text, voiceId)
       : await generateOpenAITTS(text);
 
-    setCached(cacheKey, buffer);
-    return { buffer, provider: useElevenLabs ? "elevenlabs" : "openai" };
+    setCached(cacheKey, buffer, provider);
+    return { buffer, provider };
   } catch (err) {
     if (useElevenLabs) {
       logger.warn("ElevenLabs TTS failed — falling back to OpenAI TTS", {
         errorMessage: err instanceof Error ? err.message : String(err),
       });
       const buffer = await generateOpenAITTS(text);
-      setCached(cacheKey, buffer);
+      setCached(cacheKey, buffer, "openai");
       return { buffer, provider: "openai" };
     }
     throw err;

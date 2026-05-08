@@ -6,25 +6,39 @@ import { generateBanter } from "../banter/generate";
 import { generateTTS } from "../tts/index";
 import { getGuildSettings } from "../storage/repositories";
 import { checkCooldown, setCooldown } from "./rateLimit";
+import { config } from "../config";
 import { logger } from "../logger";
 import type { VoiceManager } from "./voice";
 
 // Maximum number of concurrent per-user streams per guild (avoids N+1 ffmpeg processes)
 const MAX_CONCURRENT_STREAMS = 3;
 
+interface ConnectionHandler {
+  connection: VoiceConnection;
+  handler: (userId: string) => void;
+}
+
 export class VoiceListener {
   private activeStreams = new Map<string, Set<string>>(); // guildId → Set<userId>
+  private connectionHandlers = new Map<string, ConnectionHandler>(); // guildId → handler ref
 
   startListening(
     connection: VoiceConnection,
     guildId: string,
     voiceManager: VoiceManager,
   ): void {
+    // If already listening on this exact connection, skip re-registration
+    const existing = this.connectionHandlers.get(guildId);
+    if (existing) {
+      if (existing.connection === connection) return;
+      existing.connection.receiver.speaking.removeListener("start", existing.handler);
+    }
+
     if (!this.activeStreams.has(guildId)) {
       this.activeStreams.set(guildId, new Set());
     }
 
-    connection.receiver.speaking.on("start", (userId) => {
+    const handler = (userId: string) => {
       const streams = this.activeStreams.get(guildId)!;
 
       // Guards: no self-listen, no concurrent overload, not already processing this user
@@ -40,12 +54,20 @@ export class VoiceListener {
       this.processStream(opusStream as any, guildId, userId, voiceManager).finally(() => {
         streams.delete(userId);
       });
-    });
+    };
+
+    connection.receiver.speaking.on("start", handler);
+    this.connectionHandlers.set(guildId, { connection, handler });
 
     logger.info("Voice listener started", { guildId });
   }
 
   stopListening(guildId: string): void {
+    const existing = this.connectionHandlers.get(guildId);
+    if (existing) {
+      existing.connection.receiver.speaking.removeListener("start", existing.handler);
+      this.connectionHandlers.delete(guildId);
+    }
     this.activeStreams.delete(guildId);
     logger.info("Voice listener stopped", { guildId });
   }
@@ -105,7 +127,7 @@ export class VoiceListener {
         finalPrompt,
         settings.personality ?? "default",
         [],
-        settings.maxDailyBanters ?? 25,
+        config.MAX_BANTER_WORDS,
       );
 
       // Generate TTS audio
