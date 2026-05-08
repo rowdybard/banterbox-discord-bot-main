@@ -89,7 +89,10 @@ function serveStaticFiles(application: Express): void {
 
   // Vite dev server or static serving
   if (app.get("env") === "development") {
-    const { setupVite } = await import("./vite");
+    // Non-literal specifier prevents esbuild from bundling server/vite.ts
+    // (and its top-level `import from "vite"`) into the production bundle.
+    const devEntry = "./vite.js";
+    const { setupVite } = await import(devEntry);
     await setupVite(app, server);
   } else {
     serveStaticFiles(app);
