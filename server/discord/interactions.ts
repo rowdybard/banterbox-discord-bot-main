@@ -20,6 +20,7 @@ import {
 } from "../storage/repositories";
 import { normaliseWakeWord } from "../stt/wakeWord";
 import { listPersonalities } from "../banter/prompts";
+import { apiSemaphore } from "../util/semaphore";
 import { logger } from "../logger";
 import type { VoiceManager } from "./voice";
 import type { VoiceListener } from "./listener";
@@ -182,8 +183,12 @@ async function handleSay(
   const recentContext = await getRecentContext(guildId, 3);
   const contextLines = recentContext.map((c) => c.summary);
 
-  const text = await generateBanter(prompt, settings.personality ?? "default", contextLines);
-  const { buffer, provider } = await generateTTS(text, settings.voiceId ?? undefined);
+  // Semaphore: cap concurrent GPT + TTS calls across all guilds
+  const { text, buffer, provider } = await apiSemaphore.run(async () => {
+    const t = await generateBanter(prompt, settings.personality ?? "default", contextLines);
+    const tts = await generateTTS(t, settings.voiceId ?? undefined);
+    return { text: t, buffer: tts.buffer, provider: tts.provider };
+  });
   setCooldown(guildId, interaction.user.id, cooldownSecs);
   await voiceManager.playBuffer(guildId, buffer);
   await interaction.editReply(`Playing: *${text}*`);

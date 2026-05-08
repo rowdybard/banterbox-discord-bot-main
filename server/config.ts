@@ -22,7 +22,7 @@ const envSchema = z.object({
   DEFAULT_WAKE_WORD: z.string().default("hey banter"),
   DEFAULT_PERSONALITY: z.string().default("default"),
   DEFAULT_COOLDOWN_SECONDS: z.coerce.number().int().min(5).default(30),
-  MAX_DAILY_BANTERS_PER_GUILD: z.coerce.number().int().min(1).default(100),
+  MAX_DAILY_BANTERS_PER_GUILD: z.coerce.number().int().min(1).default(50),
   MAX_BANTER_WORDS: z.coerce.number().int().min(5).default(18),
 
   // Server

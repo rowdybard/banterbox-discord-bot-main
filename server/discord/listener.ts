@@ -1,3 +1,4 @@
+import { Readable } from "stream";
 import { VoiceConnection, EndBehaviorType } from "@discordjs/voice";
 import { transcribe } from "../stt/index";
 import { detectWakeWord } from "../stt/wakeWord";
@@ -12,6 +13,7 @@ import {
   logBanter,
 } from "../storage/repositories";
 import { checkCooldown, setCooldown } from "./rateLimit";
+import { apiSemaphore } from "../util/semaphore";
 import { config } from "../config";
 import { logger } from "../logger";
 import type { VoiceManager } from "./voice";
@@ -85,10 +87,29 @@ export class VoiceListener {
     voiceManager: VoiceManager,
   ): Promise<void> {
     try {
-      // Guard: don't transcribe if bot is already speaking (avoids self-trigger)
+      // Buffer the raw Opus packets — must consume the stream to release the
+      // subscription, and buffering lets us gate on duration before paying for STT.
+      const chunks: Buffer[] = [];
+      for await (const chunk of opusStream) {
+        chunks.push(chunk as Buffer);
+      }
+      const totalBytes = chunks.reduce((n, c) => n + c.length, 0);
+
+      // Guard: don't process if bot is already speaking (avoids self-trigger)
       if (voiceManager.isSpeaking(guildId)) return;
 
-      const transcript = await transcribe(opusStream as any);
+      // Audio duration gate — skip noise spikes (too short) and very long
+      // monologues that can't have the wake word near the start anyway.
+      // Discord Opus @ 48 kHz: ~1 s of speech ≈ 8–16 KB encoded.
+      const MIN_AUDIO_BYTES = 2_000;
+      const MAX_AUDIO_BYTES = 200_000; // ~25–40 s
+      if (totalBytes < MIN_AUDIO_BYTES || totalBytes > MAX_AUDIO_BYTES) {
+        logger.debug("Audio gated — skipping STT", { guildId, userId, bytes: totalBytes });
+        return;
+      }
+
+      // Reconstruct stream from buffered chunks (preserves original Opus framing)
+      const transcript = await transcribe(Readable.from(chunks) as any);
       if (!transcript) return;
 
       const settings = await getGuildSettings(guildId);
@@ -149,16 +170,17 @@ export class VoiceListener {
       const recentContext = await getRecentContext(guildId, 3);
       const contextLines = recentContext.map((c) => c.summary);
 
-      // Generate banter text
-      const text = await generateBanter(
-        finalPrompt,
-        settings.personality ?? "default",
-        contextLines,
-        config.MAX_BANTER_WORDS,
-      );
-
-      // Generate TTS audio
-      const { buffer, provider } = await generateTTS(text, settings.voiceId ?? undefined);
+      // Semaphore: cap concurrent GPT + TTS calls across all guilds
+      const { text, buffer, provider } = await apiSemaphore.run(async () => {
+        const t = await generateBanter(
+          finalPrompt,
+          settings.personality ?? "default",
+          contextLines,
+          config.MAX_BANTER_WORDS,
+        );
+        const tts = await generateTTS(t, settings.voiceId ?? undefined);
+        return { text: t, buffer: tts.buffer, provider: tts.provider };
+      });
 
       // Set cooldown before playing (prevents double-trigger)
       setCooldown(guildId, userId, cooldownSecs);
