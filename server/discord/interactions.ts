@@ -52,7 +52,9 @@ export async function handleInteraction(
       errorMessage: err instanceof Error ? err.message : String(err),
     });
     const msg = "Something went wrong. Try again in a moment.";
-    if (interaction.replied || interaction.deferred) {
+    if (interaction.deferred && !interaction.replied) {
+      await interaction.editReply(msg).catch(() => {});
+    } else if (interaction.replied || interaction.deferred) {
       await interaction.followUp({ content: msg, ephemeral: true }).catch(() => {});
     } else {
       await interaction.reply({ content: msg, ephemeral: true }).catch(() => {});
@@ -71,6 +73,7 @@ async function handleJoin(
   voiceListener: VoiceListener,
 ): Promise<void> {
   await interaction.deferReply({ ephemeral: true });
+  await interaction.editReply("Joining voice channel...");
 
   const channelOption = interaction.options.getChannel("channel");
 

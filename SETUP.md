@@ -88,9 +88,8 @@ Copy the connection string they provide.
 
 5. **Enable Slash Commands**
    - Go to "General Information"
-   - Under "Interactions Endpoint URL", you'll set this AFTER deployment:
-     - For local dev: Leave blank for now
-     - For production: `https://your-domain.com/api/discord/interactions`
+   - Leave "Interactions Endpoint URL" blank.
+   - BanterBox receives slash commands through the Discord Gateway connection.
 
 6. **Invite Bot to Server**
    - Go to "OAuth2" > "URL Generator"
@@ -239,11 +238,7 @@ The server will start on `http://localhost:5000`
    - Use PM2 for process management
 
 ### Post-Deployment
-1. Update Discord Interactions Endpoint:
-   - Go to Discord Developer Portal
-   - Set to: `https://your-domain.com/api/discord/interactions`
-
-2. Update redirect URIs in `.env`:
+1. Update redirect URIs in `.env`:
    ```env
    DISCORD_REDIRECT_URI=https://your-domain.com/api/auth/discord/callback
    ```

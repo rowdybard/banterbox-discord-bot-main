@@ -44,8 +44,26 @@ export class VoiceManager {
       selfMute: false,
     });
 
+    connection.on("stateChange", (oldState, newState) => {
+      logger.info("Voice connection state changed", {
+        guildId: channel.guild.id,
+        channelId: channel.id,
+        oldStatus: oldState.status,
+        newStatus: newState.status,
+      });
+    });
+
+    connection.on("error", (err) => {
+      logger.error("Voice connection error", {
+        guildId: channel.guild.id,
+        channelId: channel.id,
+        errorClass: err.constructor.name,
+        errorMessage: err.message,
+      });
+    });
+
     try {
-      await entersState(connection, VoiceConnectionStatus.Ready, 10_000);
+      await entersState(connection, VoiceConnectionStatus.Ready, 30_000);
     } catch {
       connection.destroy();
       throw new Error("Voice connection timed out");
