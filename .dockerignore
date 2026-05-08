@@ -1,0 +1,25 @@
+node_modules
+dist
+.git
+.gitignore
+.env
+.env.*
+*.local
+*.log
+npm-debug.log*
+
+# Old stale docs (not needed in image)
+CLEANUP_STATUS.md
+FIXES_APPLIED.md
+LOCAL_DEVELOPMENT.md
+REFACTORING_COMPLETE.md
+ROUTES_FIX_PLAN.md
+SETUP.md
+quick-start.js
+start.js
+verify-project.js
+
+# Windsurf/editor config
+.windsurf
+.vscode
+.idea
