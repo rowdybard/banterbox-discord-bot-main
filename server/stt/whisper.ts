@@ -15,13 +15,16 @@ export async function transcribeWhisper(audioBuffer: Buffer): Promise<string> {
   const client = getClient();
 
   const file = new File([new Uint8Array(audioBuffer)], "audio.mp3", { type: "audio/mpeg" });
+  const language = (process.env.STT_LANGUAGE ?? "").trim().toLowerCase();
 
-  const result = await client.audio.transcriptions.create({
+  const request: OpenAI.Audio.Transcriptions.TranscriptionCreateParams = {
     file,
     model: "whisper-1",
-    language: "en",
     response_format: "text",
-  });
+  };
+  if (language && language !== "auto") request.language = language;
+
+  const result = await client.audio.transcriptions.create(request);
 
   const text = typeof result === "string" ? result : (result as { text: string }).text;
 
