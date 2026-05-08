@@ -9,7 +9,11 @@ import { logger } from "../logger";
  * Uses ElevenLabs Scribe if ELEVENLABS_API_KEY is set, otherwise Whisper.
  */
 export async function transcribe(opusStream: Readable): Promise<string> {
-  const provider = process.env.ELEVENLABS_API_KEY ? "elevenlabs-stt" : "whisper";
+  const sttPref = (process.env.STT_PROVIDER ?? "").toLowerCase();
+  const provider =
+    sttPref === "whisper" || (!sttPref && !process.env.ELEVENLABS_API_KEY)
+      ? "whisper"
+      : "elevenlabs-stt";
   const start = Date.now();
 
   let audioBuffer: Buffer;

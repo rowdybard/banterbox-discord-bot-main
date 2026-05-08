@@ -18,7 +18,8 @@ export function detectWakeWord(
   transcript: string,
   wakeWord: string = DEFAULT_WAKE_WORD,
 ): WakeWordResult {
-  const clean = transcript.toLowerCase().trim();
+  // Strip punctuation so "Hey, Banter!" matches "hey banter"
+  const clean = transcript.toLowerCase().replace(/[^\w\s]/g, " ").replace(/\s+/g, " ").trim();
   const kw = wakeWord.toLowerCase().trim();
 
   const idx = clean.indexOf(kw);
