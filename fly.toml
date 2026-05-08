@@ -11,6 +11,10 @@ primary_region = "iad"
   NODE_ENV = "production"
   PORT = "8080"
 
+# Discord voice requires a dedicated public IPv4 so UDP return packets
+# (Discord voice IP discovery) are routed back to this specific machine.
+# Allocate one with: fly ips allocate-v4 --shared -a banterbox-discord-bot
+
 [http_service]
   internal_port = 8080
   force_https = true
