@@ -27,11 +27,15 @@ function today(): string {
 export async function getGuildSettings(guildId: string): Promise<GuildSettings> {
   const db = getDb();
   if (db) {
-    const [row] = await db
-      .select()
-      .from(guildSettings)
-      .where(eq(guildSettings.guildId, guildId));
-    if (row) return row;
+    try {
+      const [row] = await db
+        .select()
+        .from(guildSettings)
+        .where(eq(guildSettings.guildId, guildId));
+      if (row) return row;
+    } catch {
+      // DB unreachable — fall through to defaults so voice pipeline keeps running
+    }
   } else {
     const cached = memGuildSettings.get(guildId);
     if (cached) return cached;

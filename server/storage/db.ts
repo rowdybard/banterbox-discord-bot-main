@@ -18,7 +18,7 @@ export function getDb(): ReturnType<typeof drizzle<typeof schema>> | null {
     const client = postgres(url, {
       max: 10,
       idle_timeout: 20,
-      connect_timeout: 10,
+      connect_timeout: 3,
       ssl: url.includes("localhost") ? false : { rejectUnauthorized: false },
     });
     _db = drizzle(client, { schema });
