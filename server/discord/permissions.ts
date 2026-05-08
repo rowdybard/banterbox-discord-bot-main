@@ -9,6 +9,11 @@ import {
  * This is a real bitfield check — not a stub.
  */
 export function hasManageGuild(interaction: ChatInputCommandInteraction): boolean {
+  // Prefer raw bitfield — available even when member object is partial (common in slash commands)
+  if (interaction.memberPermissions) {
+    return interaction.memberPermissions.has(PermissionsBitField.Flags.ManageGuild);
+  }
+  // Fallback for edge cases where memberPermissions is null
   const member = interaction.member;
   if (!member || !(member instanceof GuildMember)) return false;
   return member.permissions.has(PermissionsBitField.Flags.ManageGuild);

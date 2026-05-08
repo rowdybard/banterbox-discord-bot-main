@@ -23,7 +23,9 @@ export function detectWakeWord(
   const kw = wakeWord.toLowerCase().trim();
 
   const idx = clean.indexOf(kw);
-  if (idx === -1) return { triggered: false, prompt: "" };
+  // Strict: wake word must start within the first 20 characters of the transcript.
+  // Prevents mid-sentence accidental triggers e.g. "I hope hey banter doesn't fire".
+  if (idx === -1 || idx > 20) return { triggered: false, prompt: "" };
 
   // Grab everything after the wake word, strip leading punctuation/whitespace
   const after = transcript.slice(idx + kw.length).replace(/^[\s,!?.]+/, "").trim();

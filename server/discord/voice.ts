@@ -125,6 +125,10 @@ export class VoiceManager {
     return !!conn && conn.state.status !== VoiceConnectionStatus.Destroyed;
   }
 
+  activeConnectionCount(): number {
+    return audioMap.size;
+  }
+
   isSpeaking(guildId: string): boolean {
     const audio = audioMap.get(guildId);
     return audio?.playing ?? false;

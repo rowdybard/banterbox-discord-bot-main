@@ -3,10 +3,11 @@ import { createServer } from "http";
 import { existsSync } from "fs";
 import path from "path";
 import { logger } from "./logger";
-import { startBot } from "./discord/bot";
+import { startBot, getClient, voiceManager } from "./discord/bot";
 import { getBotInviteUrl } from "./discord/commands";
 import { cacheStats } from "./tts/index";
 import { cleanExpiredContext } from "./storage/repositories";
+import { getDb } from "./storage/db";
 
 const app = express();
 
@@ -24,10 +25,17 @@ app.use(express.urlencoded({ extended: false }));
 // ---------------------------------------------------------------------------
 
 app.get("/api/health", (_req, res) => {
+  const client = getClient();
   res.json({
     status: "ok",
     timestamp: new Date().toISOString(),
+    uptimeSeconds: Math.floor(process.uptime()),
+    discordReady: client?.isReady() ?? false,
+    activeVoiceConnections: voiceManager.activeConnectionCount(),
     ttsCache: cacheStats(),
+    databaseMode: getDb() ? "postgres" : "memory",
+    elevenLabsConfigured: !!process.env.ELEVENLABS_API_KEY,
+    openAiConfigured: !!process.env.OPENAI_API_KEY,
   });
 });
 

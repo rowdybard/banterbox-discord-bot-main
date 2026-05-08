@@ -1,6 +1,6 @@
 # BanterBox 🎙️
 
-A Discord voice bot that listens for a wake word, generates a short AI roast, and plays it back via TTS — all in a few seconds.
+A Discord voice bot that listens for a wake word, generates a short AI one-liner, and plays it back via TTS — all in a few seconds.
 
 ---
 
@@ -79,6 +79,7 @@ Visit `http://localhost:5000/api/invite` after starting — it returns the OAuth
 | `/banter leave` | Everyone | Leave the voice channel |
 | `/banter say <prompt>` | Everyone | Manually trigger a response (text fallback) |
 | `/banter status` | Everyone | Show current settings and cooldown state |
+| `/banter config mode <auto\|manual>` | Manage Guild | `auto` = wake-word listening, `manual` = `/banter say` only |
 | `/banter config personality <preset>` | Manage Guild | Switch personality |
 | `/banter config wakeword <phrase>` | Manage Guild | Change the wake word |
 | `/banter config cooldown <seconds>` | Manage Guild | Set cooldown between responses (5–300s) |

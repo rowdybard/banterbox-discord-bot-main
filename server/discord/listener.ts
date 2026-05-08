@@ -4,7 +4,13 @@ import { detectWakeWord } from "../stt/wakeWord";
 import { checkPromptSafety } from "../banter/safety";
 import { generateBanter } from "../banter/generate";
 import { generateTTS } from "../tts/index";
-import { getGuildSettings } from "../storage/repositories";
+import {
+  getGuildSettings,
+  checkAndIncrementUsage,
+  getRecentContext,
+  saveContext,
+  logBanter,
+} from "../storage/repositories";
 import { checkCooldown, setCooldown } from "./rateLimit";
 import { config } from "../config";
 import { logger } from "../logger";
@@ -88,6 +94,9 @@ export class VoiceListener {
       const settings = await getGuildSettings(guildId);
       if (settings.optedOut) return;
 
+      // P1: manual mode — wake-word path is disabled; /banter say still works
+      if ((settings.mode ?? "auto") !== "auto") return;
+
       const wakeWord = settings.wakeWord ?? "hey banter";
       const { triggered, prompt } = detectWakeWord(transcript, wakeWord);
 
@@ -122,13 +131,29 @@ export class VoiceListener {
         }
       }
 
+      // P3: daily usage limit — check before any expensive API calls
+      const limit = settings.maxDailyBanters ?? 100;
+      const usage = await checkAndIncrementUsage(guildId, limit);
+      if (!usage.allowed) {
+        logger.info("Daily banter limit reached — skipping wake-word response", {
+          guildId,
+          count: usage.count,
+          limit,
+        });
+        return;
+      }
+
       const finalPrompt = prompt || "say something funny";
+
+      // P4: fetch recent context for this guild
+      const recentContext = await getRecentContext(guildId, 3);
+      const contextLines = recentContext.map((c) => c.summary);
 
       // Generate banter text
       const text = await generateBanter(
         finalPrompt,
         settings.personality ?? "default",
-        [],
+        contextLines,
         config.MAX_BANTER_WORDS,
       );
 
@@ -142,6 +167,11 @@ export class VoiceListener {
       await voiceManager.playBuffer(guildId, buffer);
 
       logger.info("Banter played", { guildId, userId, provider });
+
+      // P4: persist context + history (best-effort)
+      const summary = `User ${userId} asked: ${finalPrompt}; BanterBox replied: ${text}`;
+      await saveContext(guildId, summary, 2).catch(() => {});
+      await logBanter({ guildId, userId, prompt: finalPrompt, response: text, ttsProvider: provider }).catch(() => {});
     } catch (err) {
       logger.error("Voice pipeline error", {
         guildId,

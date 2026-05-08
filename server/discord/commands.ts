@@ -89,6 +89,21 @@ function buildCommands(): SlashCommandSubcommandsOnlyBuilder[] {
             .addBooleanOption((opt) =>
               opt.setName("value").setDescription("true = opted out").setRequired(true),
             ),
+        )
+        .addSubcommand((sub) =>
+          sub
+            .setName("mode")
+            .setDescription("Set response mode (default: auto)")
+            .addStringOption((opt) =>
+              opt
+                .setName("value")
+                .setDescription("auto = wake-word listening, manual = /banter say only")
+                .setRequired(true)
+                .addChoices(
+                  { name: "auto — wake-word listening", value: "auto" },
+                  { name: "manual — /banter say only", value: "manual" },
+                ),
+            ),
         ),
     ) as unknown as SlashCommandSubcommandsOnlyBuilder;
 

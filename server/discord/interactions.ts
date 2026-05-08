@@ -10,7 +10,14 @@ import { checkCooldown, setCooldown } from "./rateLimit";
 import { checkPromptSafety } from "../banter/safety";
 import { generateBanter } from "../banter/generate";
 import { generateTTS } from "../tts/index";
-import { getGuildSettings, upsertGuildSettings } from "../storage/repositories";
+import {
+  getGuildSettings,
+  upsertGuildSettings,
+  checkAndIncrementUsage,
+  getRecentContext,
+  saveContext,
+  logBanter,
+} from "../storage/repositories";
 import { normaliseWakeWord } from "../stt/wakeWord";
 import { listPersonalities } from "../banter/prompts";
 import { logger } from "../logger";
@@ -98,9 +105,12 @@ async function handleJoin(
   voiceListener.startListening(connection, guildId, voiceManager);
   const settings = await getGuildSettings(guildId);
 
-  await interaction.editReply(
-    `Joined **${targetChannel.name}** and listening for **"${settings.wakeWord ?? "hey banter"}"**.`,
-  );
+  const modeNote =
+    (settings.mode ?? "auto") === "manual"
+      ? "Mode is **manual** — use `/banter say` to trigger responses."
+      : `Listening for **"${settings.wakeWord ?? "hey banter"}"**. Say the wake word to trigger.`;
+
+  await interaction.editReply(`Joined **${targetChannel.name}**. ${modeNote}`);
 }
 
 async function handleLeave(
@@ -125,13 +135,23 @@ async function handleSay(
 ): Promise<void> {
   const prompt = interaction.options.getString("prompt", true);
 
+  // Safety check first (fast, no DB)
   const safety = checkPromptSafety(prompt);
   if (!safety.safe) {
     await interaction.reply({ content: `Blocked: ${safety.reason}`, ephemeral: true });
     return;
   }
 
-  const cooldown = checkCooldown(guildId, interaction.user.id, 30);
+  // P2: load settings before cooldown so we use the configured cooldown
+  const settings = await getGuildSettings(guildId);
+
+  if (settings.optedOut) {
+    await interaction.reply({ content: "Banter is opted out for this server.", ephemeral: true });
+    return;
+  }
+
+  const cooldownSecs = settings.cooldownSeconds ?? 30;
+  const cooldown = checkCooldown(guildId, interaction.user.id, cooldownSecs);
   if (!cooldown.allowed) {
     const remaining = Math.ceil(cooldown.remainingMs / 1000);
     await interaction.reply({
@@ -148,17 +168,30 @@ async function handleSay(
     return;
   }
 
-  const settings = await getGuildSettings(guildId);
-  if (settings.optedOut) {
-    await interaction.editReply("Banter is opted out for this server.");
+  // P3: daily usage limit
+  const limit = settings.maxDailyBanters ?? 100;
+  const usage = await checkAndIncrementUsage(guildId, limit);
+  if (!usage.allowed) {
+    await interaction.editReply(
+      `Daily banter limit reached (**${usage.count}/${limit}** today). Try again tomorrow.`,
+    );
     return;
   }
 
-  const text = await generateBanter(prompt, settings.personality ?? "default");
-  const { buffer } = await generateTTS(text, settings.voiceId ?? undefined);
-  setCooldown(guildId, interaction.user.id, settings.cooldownSeconds ?? 30);
+  // P4: fetch recent context
+  const recentContext = await getRecentContext(guildId, 3);
+  const contextLines = recentContext.map((c) => c.summary);
+
+  const text = await generateBanter(prompt, settings.personality ?? "default", contextLines);
+  const { buffer, provider } = await generateTTS(text, settings.voiceId ?? undefined);
+  setCooldown(guildId, interaction.user.id, cooldownSecs);
   await voiceManager.playBuffer(guildId, buffer);
   await interaction.editReply(`Playing: *${text}*`);
+
+  // P4: persist context + history (best-effort)
+  const summary = `User ${interaction.user.id} asked: ${prompt}; BanterBox replied: ${text}`;
+  await saveContext(guildId, summary, 2).catch(() => {});
+  await logBanter({ guildId, userId: interaction.user.id, prompt, response: text, ttsProvider: provider }).catch(() => {});
 }
 
 async function handleStatus(
@@ -218,6 +251,16 @@ async function handleConfig(
       const seconds = interaction.options.getInteger("seconds", true);
       await upsertGuildSettings(guildId, { cooldownSeconds: seconds });
       await interaction.reply({ content: `Cooldown set to **${seconds}s**.`, ephemeral: true });
+      break;
+    }
+    case "mode": {
+      const value = interaction.options.getString("value", true) as "auto" | "manual";
+      await upsertGuildSettings(guildId, { mode: value });
+      const desc =
+        value === "manual"
+          ? "**manual** — only `/banter say` will trigger responses."
+          : "**auto** — wake-word listening is active.";
+      await interaction.reply({ content: `Mode set to ${desc}`, ephemeral: true });
       break;
     }
     case "optout": {
